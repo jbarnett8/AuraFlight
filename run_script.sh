@@ -1,0 +1,1 @@
+python classify_labelled.py --data_dir csv --lstm_n 20 --dense_n 20 --batch_size 100 --epochs 50 --patience 10 --transformer --lr 1e-4 --num_heads 20 --augment_with_partials --partial_sequence_count 150 --dropout 0.2
