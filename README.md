@@ -9,7 +9,7 @@
 The project requires Python 3.9+ and the following dependencies:
 ```bash
 # Core packages
-numpy>=2.0.0
+numpy>=2.2.0
 torch>=2.6.0
 pandas>=2.2.3
 scikit-learn>=1.6.1
@@ -48,6 +48,7 @@ This script:
 - Evaluates performance on full flight sequences
 
 The results used in the paper are based on the best validation loss achieved during training. All model checkpoints are saved for reference.
+Note that some differences may occur due to hardware and software variations despite the random seed being fixed. Results reported on the paper were obtained on a Macbook Air M1 (2020) using `torch.device("mps")`.
 
 ### Custom Experiments
 
