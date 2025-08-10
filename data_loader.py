@@ -98,10 +98,9 @@ class AircraftManeuverDataset(Dataset):
         Returns:
             numpy.ndarray: Derivatives of shape (time_steps, features)
         """
-        # Calculate differences between consecutive time steps
+        # Note:  the time derivatives are assuming 1 Hz sampling, so no need to scale by dt
         derivatives = np.zeros_like(data)
         derivatives[1:] = data[1:] - data[:-1]
-        # First row derivative is set to 0 (since we don't have previous data)
         return derivatives
 
     def generate_partial_sequences(self, data, label, min_percentage=0.4):

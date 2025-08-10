@@ -1,26 +1,19 @@
-import matplotlib.pyplot as plt
 import numpy as np
-import torch
 import argparse
-import torch.nn as nn
 import torch.optim as optim
 import torch.optim.lr_scheduler as lr_scheduler
-from sklearn.metrics import confusion_matrix
 from tqdm import tqdm
 import torch.nn.functional as F
-from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+from sklearn.metrics import confusion_matrix
 
-from data_loader import get_train_val_test  # Import the data loader function
-from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence, PackedSequence, pack_sequence
+from data_loader import get_train_val_test
+from torch.nn.utils.rnn import pack_sequence
 
 import torch
 import torch.nn as nn
-from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence, PackedSequence
+from torch.nn.utils.rnn import pad_packed_sequence
 
-# Add at the beginning of the file, after imports
-import matplotlib as mpl
 import matplotlib.pyplot as plt
-from matplotlib.colors import LinearSegmentedColormap
 import seaborn as sns
 
 # Set up matplotlib to use LaTeX
@@ -40,10 +33,24 @@ plt.rcParams.update({
 colorblind_palette = ['#1b9e77', '#d95f02', '#7570b3', '#e7298a', '#66a61e', '#e6ab02']
 sns.set_palette(colorblind_palette)
 
+
 class TransformerClassifier(nn.Module):
+    """
+    Transformer-based neural network for time series classification.
+
+    This model uses a combination of transformer encoder layers with attention mechanisms
+    to classify flight maneuver time series data.
+
+    Args:
+        input_size (int): Number of input features
+        lstm_hidden_size (int): Size of hidden layers
+        dense_hidden_size (int): Size of dense layers
+        num_classes (int): Number of output classes
+        args (argparse.Namespace): Additional arguments for model configuration
+    """
     def __init__(self, input_size, lstm_hidden_size, dense_hidden_size, num_classes, args):
         super(TransformerClassifier, self).__init__()
-        self.num_fourier_modes = 5  # Number of Fourier modes to keep
+        self.num_fourier_modes = 5
         self.ln2 = nn.LayerNorm(input_size)
         hidden_dim = input_size * 3
         self.p1 = nn.Linear(input_size, hidden_dim)
@@ -80,12 +87,12 @@ class TransformerClassifier(nn.Module):
 
         # Generate causal attention mask (lower triangular with zeros)
         causal_mask = torch.triu(torch.ones(seq_len, seq_len) * float('-inf'), diagonal=1)
-        causal_mask = causal_mask.to(x.device)  # Move mask to the same device as x
+        causal_mask = causal_mask.to(x.device)
 
         # Apply transformer with padding mask
         transformer_out_f = self.transformer_1(
             query, key, value,
-            attn_mask=causal_mask,  # Use explicit causal mask instead of is_causal flag
+            attn_mask=causal_mask,
             need_weights=False
         )[0]
 
@@ -228,7 +235,7 @@ def train_model(model, train_loader, val_loader, num_epochs, args, patience=10, 
             print(f'Saving checkpoint at epoch {epoch}')
             torch.save(model.state_dict(), f'checkpoint_epoch_{epoch}.pth')
 
-    return epoch, acc_threshold_met
+    return epoch, acc_threshold_met, criterion
 
 
 def plot_confusion_matrix(y_true, y_pred, class_names):
@@ -272,17 +279,6 @@ def plot_confusion_matrix(y_true, y_pred, class_names):
 
 
 def test_timestep_classification(model, test_loader, model_name, device, confidence_threshold=0.8):
-    """
-    Test the model by classifying each timestep in a sequence and visualize the results.
-    Only shows predictions with confidence above the threshold.
-
-    Args:
-        model: The trained model
-        test_loader: DataLoader containing test data
-        model_name: Name of the model checkpoint to load
-        device: Device to run the model on
-        confidence_threshold: Minimum softmax probability to consider a prediction valid (default: 0.4)
-    """
     if model_name[-3:] == 'pth':
         file_name = model_name
         save_name = model_name[:-3].split('/')[-1]
@@ -421,7 +417,6 @@ def test_timestep_classification(model, test_loader, model_name, device, confide
         if alt_idx is not None:  # Only create altitude plot if altitude column is available
             fig2, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 5), sharex=True)
 
-            # Create time values (x-axis)
             time_values = np.arange(len(subsampled_true_labels))
 
             ax1.plot(
@@ -455,7 +450,6 @@ def test_timestep_classification(model, test_loader, model_name, device, confide
                         markers[label_idx], label=label_name, markersize=2, markevery=0.01
                     )
 
-            # Add details to altitude plots with formal units
             for ax in [ax1, ax2]:
                 ax.set_ylabel('Altitude (ft)')
                 ax.legend(fontsize=7)
@@ -468,8 +462,8 @@ def test_timestep_classification(model, test_loader, model_name, device, confide
             plt.close()
 
 
-def test(model, test_loader, model_name):
-    device = torch.device('mps')
+def test(model, test_loader, model_name, criterion):
+    device = torch.device('mps') if torch.backends.mps.is_available() else torch.device('cpu')
     if model_name[-3:] == 'pth':
         file_name = model_name
         save_name = model_name[:-3].split('/')[-1]
@@ -478,17 +472,6 @@ def test(model, test_loader, model_name):
         save_name = model_name.split('/')[-1]
     model.load_state_dict(torch.load(file_name))
     model.eval()
-    
-    # Get the same class weights as used in training
-    # For consistency, we should use the same weighting in evaluation
-    class_counts = torch.zeros(len(test_loader.dataset.dataset.label_dict))
-    for _, labels in test_loader.dataset:
-        for label in torch.argmax(labels.unsqueeze(0), dim=1):
-            class_counts[label] += 1
-            
-    class_weights = 1.0 / class_counts
-    class_weights = class_weights / class_weights.sum() * len(class_weights)
-    criterion = nn.CrossEntropyLoss(weight=class_weights.to(device))
     
     test_loss = 0.0
     correct = 0
@@ -512,7 +495,7 @@ def test(model, test_loader, model_name):
     accuracy = correct / total
 
     print(f'Model checkpoint {save_name} Test Loss: {test_loss:.4f}, Test Accuracy: {accuracy:.4f}')
-    # Plot the confusion matrix
+
     class_names = list(test_loader.dataset.dataset.label_dict.keys())
     plot_confusion_matrix(y_true, y_pred, class_names)
     plt.savefig(f'{save_name}_confusion_matrix.png')
@@ -520,7 +503,7 @@ def test(model, test_loader, model_name):
 
 
 def main(args):
-    device = torch.device('mps')
+    device = torch.device('mps') if torch.backends.mps.is_available() else torch.device('cpu')
     torch.set_default_dtype(torch.float32)
 
     if args.selected_columns is None:
@@ -550,18 +533,17 @@ def main(args):
         model = TransformerClassifier(input_size=input_size, lstm_hidden_size=args.lstm_n,
                                       dense_hidden_size=args.dense_n, num_classes=num_classes, args=args)
     else:
-        model = TimeSeriesClassifier(input_size=input_size, lstm_hidden_size=args.lstm_n,
-                                      dense_hidden_size=args.dense_n, num_classes=num_classes, args=args)
+        raise NotImplementedError("LSTM model is not implemented in this script.")
 
-    epochs, acc_threshold_met = train_model(model, train_loader, val_loader, num_epochs=args.epochs, patience=args.patience, args=args, device=device)
+    epochs, acc_threshold_met, criterion = train_model(model, train_loader, val_loader, num_epochs=args.epochs, patience=args.patience, args=args, device=device)
 
-    test(model, test_loader, 'best_model.pth')
+    test(model, test_loader, 'best_model.pth', criterion)
     # test each of the epoch checkpoints
     for epoch in range(10, epochs, 10):
-        test(model, test_loader, f'checkpoint_epoch_{epoch}.pth')
+        test(model, test_loader, f'checkpoint_epoch_{epoch}.pth', criterion)
     test_timestep_classification(model, test_loader, 'best_model.pth', device)
     if acc_threshold_met:
-        test(model, test_loader, 'acc_threshold.pth')
+        test(model, test_loader, 'acc_threshold.pth', criterion)
         test_timestep_classification(model, test_loader, 'acc_threshold.pth', device)
 
 if __name__ == '__main__':

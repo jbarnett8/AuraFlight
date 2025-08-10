@@ -1,12 +1,11 @@
 import argparse
 import numpy as np
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
-from torch.nn.utils.rnn import pad_packed_sequence, pack_sequence, PackedSequence
+from torch.nn.utils.rnn import pack_sequence
 import matplotlib.pyplot as plt
 from tqdm import tqdm
-from classify_labelled import PackedMaskedLayerNorm, TransformerClassifier, TimeSeriesClassifier
+from classify_labelled import TransformerClassifier
 
 # Set up matplotlib to use LaTeX
 plt.rcParams.update({
