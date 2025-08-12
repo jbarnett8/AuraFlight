@@ -225,6 +225,7 @@ def create_plots(plot_data, alt_data, predictions, confidences,
 	"""
 	# Get label names
 	label_names = args.label_names
+	maneuver_regions = []
 
 	# If we have latitude/longitude data, create lat/lon plots
 	if plot_data is not None:
@@ -417,6 +418,52 @@ def create_plots(plot_data, alt_data, predictions, confidences,
 	plt.tight_layout()
 	plt.savefig(f"{args.output_prefix}_confidence.png", dpi=300)
 	plt.close()
+
+	# Calculate F1 scores for regions with true labels
+	if plot_data is not None:
+		print("\nEvaluating prediction accuracy:")
+		# Create ground truth array (initialized with -1 for "no label")
+		time_values = plot_data[:len(smoothed_predictions), 0]
+		ground_truth = np.ones(len(time_values), dtype=int) * -1
+
+		maneuver_to_idx = {maneuver: idx for idx, maneuver in enumerate(label_names)}
+
+		# Fill ground truth array based on maneuver_regions
+		for start_time, end_time, maneuver in maneuver_regions:
+			if maneuver in maneuver_to_idx:
+				mask = (time_values >= start_time) & (time_values <= end_time)
+				ground_truth[mask] = maneuver_to_idx[maneuver]
+
+		# Calculate metrics per class
+		class_metrics = {}
+		for label_idx, label_name in enumerate(label_names):
+			if label_idx not in ground_truth:
+				continue
+
+			labeled_regions = ground_truth != -1
+			predicted_this_class = (smoothed_predictions == label_idx) & smoothed_mask & labeled_regions
+			ground_truth_this_class = (ground_truth == label_idx) & labeled_regions
+
+			# Calculate TP, FP, FN
+			true_positives = np.sum(predicted_this_class & ground_truth_this_class)
+			false_positives = np.sum(predicted_this_class & ~ground_truth_this_class)
+			false_negatives = np.sum(~predicted_this_class & ground_truth_this_class)
+
+			precision = true_positives / (true_positives + false_positives) if (true_positives + false_positives) > 0 else 0
+			recall = true_positives / (true_positives + false_negatives) if (true_positives + false_negatives) > 0 else 0
+			f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
+
+			class_metrics[label_name] = {
+				"precision": precision,
+				"recall": recall,
+				"f1": f1
+			}
+
+			print(f"{label_name}: Precision={precision:.3f}, Recall={recall:.3f}, F1={f1:.3f}")
+
+		if class_metrics:
+			macro_f1 = np.mean([metrics["f1"] for metrics in class_metrics.values()])
+			print(f"Macro Average F1: {macro_f1:.3f}")
 
 
 def main():

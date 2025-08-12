@@ -1,4 +1,6 @@
 # AuraFlight
+The following repository contains some of the code and data used in the paper "Aura: An Automated System for the Real-Time Evaluation of Flight Maneuver Performance".
+
 ## Overview
 - Automated classification of flight maneuvers using transformer-based deep learning
 - Real-time evaluation capabilities for flight performance
@@ -71,6 +73,9 @@ Running the `make_plot.sh` script generates:
 - `prediction_altitude_time_predictions.png`: True and predicted classification along the altitude plot
 - `prediction_confidence.png`: Model confidence in its predictions as a function of time
 - `prediction_lat_lon_predictions.png`: Predicted classification along the latitude and longitude plot
+
+## Additional Code
+Because some of the code used to generate results in the paper rely on access to specialized hardware (the OAK-D camera system, specifically), we have not provided these files to avoid confusion. However, they, along with the image data, are available upon request. 
 
 ## Citation
 
